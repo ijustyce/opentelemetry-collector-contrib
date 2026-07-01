@@ -108,6 +108,10 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 		if r.needsUpdateFingerprint {
 			r.updateFingerprint()
 		}
+
+		if r.FileType != gzipExtension {
+			r.fadviseFile()
+		}
 	}()
 
 	if r.headerReader != nil {
