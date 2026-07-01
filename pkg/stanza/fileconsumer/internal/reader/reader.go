@@ -61,6 +61,16 @@ type Reader struct {
 	maxBatchSize           int
 }
 
+func (r *Reader) ReadToEndAdvise(ctx context.Context) {
+	defer func() {
+		if r.FileType != gzipExtension {
+			r.fadviseFile()
+			r.set.Logger.Info("fadvise file", zap.String("file", r.file.Name()))
+		}
+	}()
+	r.ReadToEnd(ctx)
+}
+
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
 	if r.acquireFSLock {
@@ -107,10 +117,6 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 	defer func() {
 		if r.needsUpdateFingerprint {
 			r.updateFingerprint()
-		}
-
-		if r.FileType != gzipExtension {
-			r.fadviseFile()
 		}
 	}()
 
