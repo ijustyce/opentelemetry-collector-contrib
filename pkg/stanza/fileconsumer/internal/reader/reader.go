@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"os"
 	"sync"
 
@@ -105,14 +104,19 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 		return
 	}
 
+	r.set.Logger.Info("readContents", zap.String("file", r.file.Name()),
+		zap.String("FileType", r.FileType))
+
 	defer func() {
 		if r.needsUpdateFingerprint {
 			r.updateFingerprint()
 		}
+		r.set.Logger.Info("fadvise file", zap.String("file", r.file.Name()),
+			zap.String("FileType", r.FileType))
 		// fadvise file
 		if r.FileType != gzipExtension {
+			r.set.Logger.Info("do fadvise file", zap.String("file", r.file.Name()))
 			r.fadviseFile()
-			log.Default().Printf("fadvise file %s\n", r.file.Name())
 		}
 	}()
 
