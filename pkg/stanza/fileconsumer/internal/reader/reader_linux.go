@@ -36,5 +36,7 @@ func (r *Reader) unlockFile() {
 func (r *Reader) fadviseFile() {
 	if err := unix.Fadvise(int(r.file.Fd()), 0, 0, unix.FADV_DONTNEED); err != nil {
 		r.set.Logger.Warn("fadvise DONTNEED failed", zap.Error(err))
+	} else {
+		r.set.Logger.Info("fadvise DONTNEED success", zap.String("file", r.file.Name()))
 	}
 }

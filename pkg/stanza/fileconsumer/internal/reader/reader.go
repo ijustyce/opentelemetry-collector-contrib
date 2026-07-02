@@ -65,7 +65,6 @@ func (r *Reader) ReadToEndAdvise(ctx context.Context) {
 	defer func() {
 		if r.FileType != gzipExtension {
 			r.fadviseFile()
-			r.set.Logger.Info("do fadvise file", zap.String("file", r.file.Name()))
 		}
 	}()
 	r.ReadToEnd(ctx)

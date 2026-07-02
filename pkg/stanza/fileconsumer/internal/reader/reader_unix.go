@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build unix && !aix && !solaris
+//go:build unix && !linux && !aix && !solaris
 
 package reader // import "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/reader"
 
@@ -33,4 +33,6 @@ func (r *Reader) unlockFile() {
 	}
 }
 
-func (*Reader) fadviseFile() {}
+func (r *Reader) fadviseFile() {
+	r.set.Logger.Warn("fadvise DONTNEED mocked")
+}
