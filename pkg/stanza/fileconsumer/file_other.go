@@ -60,7 +60,7 @@ OUTER:
 		go func(r *reader.Reader) {
 			defer lostWG.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)
-			r.ReadToEnd(ctx)
+			r.ReadToEndAdvise(ctx)
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, -1)
 		}(lostReader)
 	}
