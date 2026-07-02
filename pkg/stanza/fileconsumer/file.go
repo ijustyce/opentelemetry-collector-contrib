@@ -285,6 +285,16 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 		var err error
 
 		if md != nil {
+			if info, statErr := file.Stat(); statErr == nil && md.Offset > info.Size() {
+				m.set.Logger.Info("Stored offset exceeds current file size. Storing new offset",
+					zap.String("path", file.Name()),
+					zap.Int64("stored_offset", md.Offset),
+					zap.Int64("current_file_size", info.Size()),
+					zap.Int64("new_offset", info.Size()),
+				)
+				// md.Offset = info.Size()
+				md.Offset = 0
+			}
 			reader, err = m.readerFactory.NewReaderFromMetadata(file, md)
 			if m.tracker.Name() != tracker.NoStateTracker {
 				m.set.Logger.Info("File found in archive. Started watching file again", zap.String("path", file.Name()))
@@ -322,11 +332,32 @@ func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.
 					zap.String("rotated_path", file.Name()))
 			}
 		}
-		return m.readerFactory.NewReaderFromMetadata(file, oldReader.Close())
+		md := oldReader.Close()
+		if info, err := file.Stat(); err == nil && md.Offset > info.Size() {
+			m.set.Logger.Info("Stored offset exceeds current file size. Storing new offset",
+				zap.String("path", file.Name()),
+				zap.Int64("stored_offset", md.Offset),
+				zap.Int64("current_file_size", info.Size()),
+				zap.Int64("new_offset", info.Size()),
+			)
+			// md.Offset = info.Size()
+			md.Offset = 0
+		}
+		return m.readerFactory.NewReaderFromMetadata(file, md)
 	}
 
 	// Check for closed files for match
 	if oldMetadata := m.tracker.GetClosedFile(fp); oldMetadata != nil {
+		if info, statErr := file.Stat(); statErr == nil && oldMetadata.Offset > info.Size() {
+			m.set.Logger.Info("Stored offset exceeds current file size. Storing new offset",
+				zap.String("path", file.Name()),
+				zap.Int64("stored_offset", oldMetadata.Offset),
+				zap.Int64("current_file_size", info.Size()),
+				zap.Int64("new_offset", info.Size()),
+			)
+			// oldMetadata.Offset = info.Size()
+			oldMetadata.Offset = 0
+		}
 		r, err := m.readerFactory.NewReaderFromMetadata(file, oldMetadata)
 		if err != nil {
 			return nil, err

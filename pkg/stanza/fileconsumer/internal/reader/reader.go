@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"os"
 	"sync"
 
@@ -62,10 +63,11 @@ type Reader struct {
 }
 
 func (r *Reader) ReadToEndAdvise(ctx context.Context) {
+	log.Default().Printf("ReadToEndAdvise %s, type %s\n", r.file.Name(), r.FileType)
 	defer func() {
 		if r.FileType != gzipExtension {
 			r.fadviseFile()
-			r.set.Logger.Info("fadvise file", zap.String("file", r.file.Name()))
+			log.Default().Printf("fadvise file %s\n", r.file.Name())
 		}
 	}()
 	r.ReadToEnd(ctx)
