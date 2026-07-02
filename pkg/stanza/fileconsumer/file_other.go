@@ -7,7 +7,6 @@ package fileconsumer // import "github.com/open-telemetry/opentelemetry-collecto
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -57,12 +56,11 @@ OUTER:
 	var lostWG sync.WaitGroup
 	for _, lostReader := range lostReaders {
 		lostWG.Add(1)
-		log.Default().Printf("Reading lost file %s\n", lostReader.GetFileName())
 		m.set.Logger.Info("Reading lost file", zap.String("path", lostReader.GetFileName()))
 		go func(r *reader.Reader) {
 			defer lostWG.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)
-			r.ReadToEndAdvise(ctx)
+			r.ReadToEnd(ctx)
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, -1)
 		}(lostReader)
 	}
