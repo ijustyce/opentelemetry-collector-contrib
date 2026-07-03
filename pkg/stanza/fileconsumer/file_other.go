@@ -56,7 +56,7 @@ OUTER:
 	var lostWG sync.WaitGroup
 	for _, lostReader := range lostReaders {
 		lostWG.Add(1)
-		m.set.Logger.Info("Reading lost file", zap.String("path", lostReader.GetFileName()))
+		m.set.Logger.Debug("Reading lost file", zap.String("path", lostReader.GetFileName()))
 		go func(r *reader.Reader) {
 			defer lostWG.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)

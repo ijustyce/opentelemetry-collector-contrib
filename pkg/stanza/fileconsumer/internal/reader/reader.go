@@ -30,6 +30,7 @@ const gzipExtension = ".gz"
 type Metadata struct {
 	Fingerprint     *fingerprint.Fingerprint
 	Offset          int64
+	DontNeedOffset  int64
 	RecordNum       int64
 	FileAttributes  map[string]any
 	HeaderFinalized bool
@@ -69,6 +70,8 @@ func (r *Reader) ReadToEndAdvise(ctx context.Context) {
 	}()
 	r.ReadToEnd(ctx)
 }
+
+const dontNeedSize = 50 * 1024 * 1024
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
@@ -116,6 +119,10 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 	defer func() {
 		if r.needsUpdateFingerprint {
 			r.updateFingerprint()
+		}
+
+		if r.FileType != gzipExtension && r.Offset-r.DontNeedOffset > dontNeedSize {
+			r.fadviseFile()
 		}
 	}()
 

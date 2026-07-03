@@ -202,7 +202,7 @@ func (m *Manager) makeFingerprint(path string) (*fingerprint.Fingerprint, *os.Fi
 				}
 				m.set.Logger.Error("Failed to open file - unreadable", zap.Error(err), zap.String("original_path", path), zap.String("normalized_path", normalizedPath))
 			}
-		} else {
+		} else if !errors.Is(err, fs.ErrNotExist) {
 			// For non-permission errors, always log
 			m.set.Logger.Error("Failed to open file", zap.Error(err), zap.String("original_path", path), zap.String("normalized_path", normalizedPath))
 		}
