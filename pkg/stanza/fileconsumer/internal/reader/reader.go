@@ -28,15 +28,16 @@ import (
 const gzipExtension = ".gz"
 
 type Metadata struct {
-	Fingerprint     *fingerprint.Fingerprint
-	Offset          int64
-	DontNeedOffset  int64
-	RecordNum       int64
-	FileAttributes  map[string]any
-	HeaderFinalized bool
-	FlushState      flush.State
-	TokenLenState   tokenlen.State
-	FileType        string
+	Fingerprint       *fingerprint.Fingerprint
+	Offset            int64
+	DontNeedOffset    int64
+	DontNeedIdlePolls int64
+	RecordNum         int64
+	FileAttributes    map[string]any
+	HeaderFinalized   bool
+	FlushState        flush.State
+	TokenLenState     tokenlen.State
+	FileType          string
 }
 
 // Reader manages a single file
@@ -72,6 +73,7 @@ func (r *Reader) ReadToEndAdvise(ctx context.Context) {
 }
 
 const dontNeedSize = 50 * 1024 * 1024
+const dontNeedTimes = 5 * 60 //	假设每秒 poll 一次，这里为 5 分钟
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
@@ -116,13 +118,30 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 		return
 	}
 
+	startOffset := r.Offset
+	if r.DontNeedOffset > startOffset {
+		r.Reset(startOffset)
+	}
 	defer func() {
 		if r.needsUpdateFingerprint {
 			r.updateFingerprint()
 		}
 
-		if r.FileType != gzipExtension && r.Offset-r.DontNeedOffset > dontNeedSize {
-			r.fadviseFile()
+		if r.FileType != gzipExtension {
+			if r.Offset == startOffset {
+				r.DontNeedIdlePolls++
+			} else {
+				r.DontNeedIdlePolls = 0
+			}
+
+			pending := r.Offset - r.DontNeedOffset
+			if pending <= 0 {
+				r.DontNeedIdlePolls = 0
+				return
+			}
+			if pending >= dontNeedSize || r.DontNeedIdlePolls >= dontNeedTimes {
+				r.fadviseFile()
+			}
 		}
 	}()
 
@@ -350,8 +369,14 @@ func (r *Reader) GetFileName() string {
 	return r.fileName
 }
 
-func (m Metadata) GetFingerprint() *fingerprint.Fingerprint {
+func (m *Metadata) GetFingerprint() *fingerprint.Fingerprint {
 	return m.Fingerprint
+}
+
+func (m *Metadata) Reset(offset int64) {
+	m.Offset = offset
+	m.DontNeedOffset = m.Offset
+	m.DontNeedIdlePolls = 0
 }
 
 func (r *Reader) updateFingerprint() {

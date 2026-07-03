@@ -116,7 +116,7 @@ func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, 
 		if info, err = r.file.Stat(); err != nil {
 			return nil, fmt.Errorf("stat: %w", err)
 		}
-		r.Offset = info.Size()
+		r.Reset(info.Size())
 	}
 
 	tokenLenFunc := m.TokenLenState.Func(f.SplitFunc)

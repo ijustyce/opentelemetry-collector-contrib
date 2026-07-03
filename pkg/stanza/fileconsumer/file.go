@@ -293,7 +293,7 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 					zap.Int64("new_offset", info.Size()),
 				)
 				// md.Offset = info.Size()
-				md.Offset = 0
+				md.Reset(0)
 			}
 			reader, err = m.readerFactory.NewReaderFromMetadata(file, md)
 			if m.tracker.Name() != tracker.NoStateTracker {
@@ -341,7 +341,7 @@ func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.
 				zap.Int64("new_offset", info.Size()),
 			)
 			// md.Offset = info.Size()
-			md.Offset = 0
+			md.Reset(0)
 		}
 		return m.readerFactory.NewReaderFromMetadata(file, md)
 	}
@@ -356,7 +356,7 @@ func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.
 				zap.Int64("new_offset", info.Size()),
 			)
 			// oldMetadata.Offset = info.Size()
-			oldMetadata.Offset = 0
+			oldMetadata.Reset(0)
 		}
 		r, err := m.readerFactory.NewReaderFromMetadata(file, oldMetadata)
 		if err != nil {
