@@ -45,7 +45,7 @@ func TestConfigBuildFailure(t *testing.T) {
 func TestParserStringFailure(t *testing.T) {
 	parser := newTestParser(t)
 	_, err := parser.parse("invalid")
-	require.ErrorContains(t, err, "expected { character for map value")
+	require.ErrorContains(t, err, "Syntax error at index 0")
 }
 
 func TestParserByteFailure(t *testing.T) {
