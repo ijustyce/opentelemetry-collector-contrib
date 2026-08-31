@@ -72,8 +72,11 @@ func (r *Reader) ReadToEndAdvise(ctx context.Context) {
 	r.ReadToEnd(ctx)
 }
 
-const dontNeedSize = 50 * 1024 * 1024
-const dontNeedTimes = 5 * 60 //	假设每秒 poll 一次，这里为 5 分钟
+// 改为 5M 避免 oom
+const dontNeedSize = 5 * 1024 * 1024
+
+// 1 分钟
+const dontNeedTimes = 60 //	假设每秒 poll 一次，这里为 1 分钟
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
