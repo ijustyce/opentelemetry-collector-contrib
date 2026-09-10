@@ -19,7 +19,7 @@ func TestSeekDataSkipsHole(t *testing.T) {
 	const dataOffset = 256 << 20
 	_, err = file.WriteAt([]byte("log"), dataOffset)
 	require.NoError(t, err)
-	offset, err := seekData(file)
+	offset, err := seekData(file, nil)
 	require.NoError(t, err)
 	if offset == 0 {
 		t.Skip("filesystem does not report leading holes")

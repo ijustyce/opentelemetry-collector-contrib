@@ -35,7 +35,9 @@ func seekData(file *os.File, metrics *Metrics) (offset int64, err error) {
 	case errors.Is(err, unix.ENXIO):
 		// ENXIO：查询位置已到达文件末尾，或其后没有数据区（如空文件、全空洞文件）。
 		// 使用当前文件大小作为 offset 返回，标明该范围后无有效数据。
-		metrics.seekFull.Add(context.Background(), 1)
+		if metrics != nil {
+			metrics.seekFull.Add(context.Background(), 1)
+		}
 		info, err2 := file.Stat()
 		if err2 != nil {
 			return 0, err2
@@ -45,11 +47,15 @@ func seekData(file *os.File, metrics *Metrics) (offset int64, err error) {
 		// EINVAL：在此查询中通常表示不识别或不支持 SEEK_DATA 这一定位方式。
 		// ENOTSUP：文件系统或文件不支持该操作；ENOSYS：系统未实现该操作。
 		// 将这些情况视为不支持空洞定位，返回文件头位置，回退到有界内存的顺序扫描。
-		metrics.seekFailed.Add(context.Background(), 1)
+		if metrics != nil {
+			metrics.seekFailed.Add(context.Background(), 1)
+		}
 		return 0, nil
 	default:
 		// 成功时返回数据区偏移；其他错误原样上报，不掩盖实际的读取或定位故障。
-		metrics.seekSuccess.Add(context.Background(), 1)
+		if metrics != nil {
+			metrics.seekSuccess.Add(context.Background(), 1)
+		}
 		return offset, err
 	}
 }

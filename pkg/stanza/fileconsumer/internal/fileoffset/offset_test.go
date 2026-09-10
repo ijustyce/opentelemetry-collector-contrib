@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +33,7 @@ func TestFirstNonNUL(t *testing.T) {
 			require.NoError(t, err)
 			_, err = file.Seek(7, io.SeekStart)
 			require.NoError(t, err)
-			offset, err := FirstNonNUL(file)
+			offset, err := FirstNonNUL(file, nil)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, offset)
 			position, err := file.Seek(0, io.SeekCurrent)
@@ -48,7 +49,7 @@ func TestFirstNonNULOnlyHole(t *testing.T) {
 	defer file.Close()
 	const size = 64 << 20
 	require.NoError(t, file.Truncate(size))
-	offset, err := FirstNonNUL(file)
+	offset, err := FirstNonNUL(file, nil)
 	require.NoError(t, err)
 	require.Equal(t, int64(size), offset)
 }
@@ -63,9 +64,17 @@ func BenchmarkFirstNonNULLargeHole(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		offset, readErr := FirstNonNUL(file)
+		offset, readErr := FirstNonNUL(file, nil)
 		if readErr != nil || offset != start {
 			b.Fatalf("offset=%d, err=%v", offset, readErr)
 		}
 	}
+}
+
+func TestOffset(t *testing.T) {
+	file, err := os.Open("/tmp/alloy.log")
+	assert.Nil(t, err)
+	defer file.Close()
+
+	FirstNonNUL(file, nil)
 }
