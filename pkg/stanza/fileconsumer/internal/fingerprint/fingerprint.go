@@ -36,7 +36,7 @@ func New(first []byte) *Fingerprint {
 // NewFromFile computes the fingerprint using the first 'N' bytes after the
 // leading NUL prefix of an uncompressed file, without changing its position.
 // Set decompressData to true to compute fingerprint of compressed files by decompressing its data first
-func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logger) (*Fingerprint, error) {
+func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logger, metrics *fileoffset.Metrics) (*Fingerprint, error) {
 	buf := make([]byte, size)
 	if metadata.FilelogDecompressFingerprintFeatureGate.IsEnabled() {
 		if decompressData {
@@ -69,7 +69,7 @@ func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logge
 		return New(buf[:n]), nil
 	}
 	// 仅在首字节为 NUL 时定位实际内容，并复用缓冲区重新读取指纹。
-	offset, err := fileoffset.FirstNonNUL(file)
+	offset, err := fileoffset.FirstNonNUL(file, metrics)
 	if err != nil {
 		return nil, fmt.Errorf("finding fingerprint start: %w", err)
 	}

@@ -45,6 +45,7 @@ type Metadata struct {
 type Reader struct {
 	*Metadata
 	set                    component.TelemetrySettings
+	fileOffsetMetrics      *fileoffset.Metrics
 	fileName               string
 	file                   *os.File
 	reader                 io.Reader
@@ -260,7 +261,7 @@ func (r *Reader) readContents(ctx context.Context) (skipped int64) {
 		}
 		if n > 0 && firstByte[0] == 0 {
 			// 仅处理普通文件的前导 NUL，保留内容中间的零字节。
-			offset, err2 := fileoffset.FirstNonNUL(r.file)
+			offset, err2 := fileoffset.FirstNonNUL(r.file, r.fileOffsetMetrics)
 			if err2 != nil {
 				r.set.Logger.Error("failed to locate file data", zap.Error(err2))
 				return
@@ -391,7 +392,7 @@ func (r *Reader) Validate() bool {
 	if r.file == nil {
 		return false
 	}
-	refreshedFingerprint, err := fingerprint.NewFromFile(r.file, r.fingerprintSize, r.compression != "", r.set.Logger)
+	refreshedFingerprint, err := fingerprint.NewFromFile(r.file, r.fingerprintSize, r.compression != "", r.set.Logger, r.fileOffsetMetrics)
 	if err != nil {
 		return false
 	}
@@ -417,7 +418,7 @@ func (r *Reader) updateFingerprint() {
 	if r.file == nil {
 		return
 	}
-	refreshedFingerprint, err := fingerprint.NewFromFile(r.file, r.fingerprintSize, r.compression != "", r.set.Logger)
+	refreshedFingerprint, err := fingerprint.NewFromFile(r.file, r.fingerprintSize, r.compression != "", r.set.Logger, r.fileOffsetMetrics)
 	if err != nil {
 		return
 	}

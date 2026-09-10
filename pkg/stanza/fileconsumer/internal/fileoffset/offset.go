@@ -10,28 +10,52 @@ import (
 	"io"
 	"os"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 )
 
-// 使用包名作为 Scope Name 初始化 Meter
-var meter = otel.Meter("seek_data")
+type Metrics struct {
+	firstNonNullCounter metric.Int64Counter
+	seekSuccess         metric.Int64Counter
+	seekFailed          metric.Int64Counter
+	seekFull            metric.Int64Counter
+}
 
-var firstNonNullCounter, _ = meter.Int64Counter(
-	"first_non_null_total",
-	metric.WithDescription("Total number of first nonnull call"),
-)
+func NewMetrics(meter metric.Meter) (*Metrics, error) {
+	metrics := &Metrics{}
+	var errs error
+	var err error
+	metrics.firstNonNullCounter, err = meter.Int64Counter(
+		"first_non_null_total",
+		metric.WithDescription("Total number of first nonnull call"),
+	)
+	errs = errors.Join(errs, err)
+	metrics.seekSuccess, err = meter.Int64Counter(
+		"first_non_null_success",
+		metric.WithDescription("Total number of first nonnull call"),
+	)
+	errs = errors.Join(errs, err)
+	metrics.seekFailed, err = meter.Int64Counter(
+		"first_non_null_failed",
+		metric.WithDescription("Total number of first nonnull call"),
+	)
+	errs = errors.Join(errs, err)
+	metrics.seekFull, err = meter.Int64Counter(
+		"first_non_null_full",
+		metric.WithDescription("Total number of first nonnull call"),
+	)
+	errs = errors.Join(errs, err)
+	return metrics, errs
+}
 
 // FirstNonNUL 返回跳过前导 NUL（0x00）后的首个非零字节的物理偏移。
 // 空文件或全为 NUL 的文件返回扫描到的文件末尾位置，不将 EOF 作为错误返回。
 // 函数会恢复文件的原始读取位置；调用期间，调用方必须独占该文件句柄的偏移状态，
 // 避免其他操作与内部 Seek 及位置恢复相互干扰。
-func FirstNonNUL(file *os.File) (int64, error) {
-
-	firstNonNullCounter.Add(context.Background(), 1)
+func FirstNonNUL(file *os.File, metric *Metrics) (int64, error) {
+	metric.firstNonNullCounter.Add(context.Background(), 1)
 
 	// 优先让文件系统定位数据区，避免逐字节读取大段稀疏空洞。
-	offset, err := seekData(file)
+	offset, err := seekData(file, metric)
 	if err != nil {
 		return 0, err
 	}

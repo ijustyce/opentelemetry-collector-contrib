@@ -11,30 +11,14 @@ import (
 	"io"
 	"os"
 
-	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sys/unix"
-)
-
-var seekSuccess, _ = meter.Int64Counter(
-	"first_non_null_success",
-	metric.WithDescription("Total number of first nonnull call"),
-)
-
-var seekFailed, _ = meter.Int64Counter(
-	"first_non_null_failed",
-	metric.WithDescription("Total number of first nonnull call"),
-)
-
-var seekFull, _ = meter.Int64Counter(
-	"first_non_null_full",
-	metric.WithDescription("Total number of first nonnull call"),
 )
 
 // seekData 返回文件系统报告的首个数据区的物理偏移，并恢复原始文件位置。
 // 数据区仍可能包含零字节，调用方需要继续检查实际内容。
 // 不支持 SEEK_DATA 时返回 0 供调用方顺序扫描；没有数据区时返回查询前的文件大小。
 // 调用期间不能有其他操作并发修改同一文件句柄的偏移。
-func seekData(file *os.File) (offset int64, err error) {
+func seekData(file *os.File, metrics *Metrics) (offset int64, err error) {
 	// SEEK_DATA 会改变文件位置，因此先保存位置，并在所有后续返回路径中恢复。
 	position, err := file.Seek(0, io.SeekCurrent)
 	if err != nil {
@@ -51,7 +35,7 @@ func seekData(file *os.File) (offset int64, err error) {
 	case errors.Is(err, unix.ENXIO):
 		// ENXIO：查询位置已到达文件末尾，或其后没有数据区（如空文件、全空洞文件）。
 		// 使用当前文件大小作为 offset 返回，标明该范围后无有效数据。
-		seekFull.Add(context.Background(), 1)
+		metrics.seekFull.Add(context.Background(), 1)
 		info, err2 := file.Stat()
 		if err2 != nil {
 			return 0, err2
@@ -61,11 +45,11 @@ func seekData(file *os.File) (offset int64, err error) {
 		// EINVAL：在此查询中通常表示不识别或不支持 SEEK_DATA 这一定位方式。
 		// ENOTSUP：文件系统或文件不支持该操作；ENOSYS：系统未实现该操作。
 		// 将这些情况视为不支持空洞定位，返回文件头位置，回退到有界内存的顺序扫描。
-		seekFailed.Add(context.Background(), 1)
+		metrics.seekFailed.Add(context.Background(), 1)
 		return 0, nil
 	default:
 		// 成功时返回数据区偏移；其他错误原样上报，不掩盖实际的读取或定位故障。
-		seekSuccess.Add(context.Background(), 1)
+		metrics.seekSuccess.Add(context.Background(), 1)
 		return offset, err
 	}
 }
