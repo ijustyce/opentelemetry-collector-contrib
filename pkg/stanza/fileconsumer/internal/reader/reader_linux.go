@@ -33,9 +33,16 @@ func (r *Reader) unlockFile() {
 	}
 }
 
-func (r *Reader) fadviseFile() {
+func (r *Reader) fadviseFile(full bool) {
 	if r.file == nil {
 		r.Reset(r.Offset)
+		return
+	}
+
+	if full {
+		if err := unix.Fadvise(int(r.file.Fd()), 0, 0, unix.FADV_DONTNEED); err != nil {
+			r.set.Logger.Warn("fadvise DONTNEED failed", zap.Error(err))
+		}
 		return
 	}
 
@@ -43,9 +50,6 @@ func (r *Reader) fadviseFile() {
 		if err := unix.Fadvise(int(r.file.Fd()), r.DontNeedOffset, length, unix.FADV_DONTNEED); err != nil {
 			r.set.Logger.Warn("fadvise DONTNEED failed", zap.Error(err))
 		} else {
-			r.set.Logger.Info("fadvise DONTNEED success", zap.Int64("offset", r.Offset),
-				zap.Int64("dontNeedOffset", r.DontNeedOffset), zap.Int64("length", length),
-				zap.Int64("DontNeedIdlePolls", r.DontNeedIdlePolls))
 			r.DontNeedOffset = r.Offset
 			r.DontNeedIdlePolls = 0
 		}

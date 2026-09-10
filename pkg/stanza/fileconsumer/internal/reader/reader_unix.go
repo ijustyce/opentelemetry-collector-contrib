@@ -33,6 +33,6 @@ func (r *Reader) unlockFile() {
 	}
 }
 
-func (r *Reader) fadviseFile() {
+func (r *Reader) fadviseFile(full bool) {
 	r.set.Logger.Warn("fadvise DONTNEED mocked")
 }

@@ -370,6 +370,30 @@ func TestRotatedOutOfPatternCopyTruncate(t *testing.T) {
 
 // TruncateThenWrite tests that, after a file has been truncated,
 // any new writes are picked up
+func TestTruncateThenWriteWithoutSeek(t *testing.T) {
+	if runtime.GOOS == windowsOS {
+		t.Skip("rotation tests require Unix file semantics")
+	}
+	tempDir := t.TempDir()
+	cfg := NewConfig().includeDir(tempDir)
+	cfg.StartAt = "beginning"
+	operator, sink := testManager(t, cfg)
+	operator.persister = testutil.NewUnscopedMockPersister()
+	file := filetest.OpenTemp(t, tempDir)
+	// 模拟已经写到较大位置的文件，随后截断但不重置写入方 offset。
+	_, err := file.Seek((256<<20)+123, io.SeekStart)
+	require.NoError(t, err)
+	filetest.WriteString(t, file, "old log\n")
+	operator.poll(t.Context())
+	sink.ExpectToken(t, []byte("old log"))
+	require.NoError(t, file.Truncate(0))
+	filetest.WriteString(t, file, "new log\n")
+	operator.poll(t.Context())
+	sink.ExpectToken(t, []byte("new log"))
+	operator.poll(t.Context())
+	sink.ExpectNoCalls(t)
+}
+
 func TestTruncateThenWrite(t *testing.T) {
 	if runtime.GOOS == windowsOS {
 		t.Skip("Rotation tests have been flaky on Windows. See https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/16331")

@@ -27,6 +27,65 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/trim"
 )
 
+func TestReadContentsNULPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		contents string
+		start    int64
+		want     string
+	}{
+		{name: "ordinary", contents: "log\n", want: "log"},
+		{name: "embedded NUL", contents: "a\x00b\n", want: "a\x00b"},
+		{name: "leading NUL", contents: "\x00log\n", want: "log"},
+		{name: "nonzero offset", contents: "x\x00log\n", start: 1, want: "\x00log"},
+		{name: "empty"},
+		{name: "only NULs", contents: "\x00\x00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := filetest.OpenTemp(t, t.TempDir())
+			_, err := file.WriteString(tc.contents)
+			require.NoError(t, err)
+			f, sink := testFactory(t)
+			fp, err := f.NewFingerprint(file)
+			require.NoError(t, err)
+			r, err := f.NewReader(filetest.OpenFile(t, file.Name()), fp)
+			require.NoError(t, err)
+			defer r.Close()
+			r.Offset = tc.start
+			r.ReadToEnd(t.Context())
+			if tc.want != "" {
+				sink.ExpectToken(t, []byte(tc.want))
+			}
+			sink.ExpectNoCalls(t)
+			require.Equal(t, int64(len(tc.contents)), r.Offset)
+		})
+	}
+}
+
+func TestReadContentsSparseFile(t *testing.T) {
+	file := filetest.OpenTemp(t, t.TempDir())
+	const start = (256 << 20) + 123
+	_, err := file.WriteAt([]byte("\x00test\x00log\n"), start)
+	require.NoError(t, err)
+	f, sink := testFactory(t)
+	callback := f.EmitFunc
+	f.EmitFunc = func(ctx context.Context, tokens [][]byte, attributes map[string]any, recordNum int64, offsets []int64) error {
+		require.Equal(t, int64(start+1), offsets[0])
+		require.Equal(t, int64(start+10), offsets[1])
+		return callback(ctx, tokens, attributes, recordNum, offsets)
+	}
+	fp, err := f.NewFingerprint(file)
+	require.NoError(t, err)
+	r, err := f.NewReader(filetest.OpenFile(t, file.Name()), fp)
+	require.NoError(t, err)
+	defer r.Close()
+	r.ReadToEnd(t.Context())
+	sink.ExpectToken(t, []byte("test\x00log"))
+	require.Equal(t, int64(start+10), r.Offset)
+	r.ReadToEnd(t.Context())
+	sink.ExpectNoCalls(t)
+}
+
 func TestFileReader_FingerprintUpdated(t *testing.T) {
 	t.Parallel()
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/textutils"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/emit"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fileoffset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fingerprint"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/header"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
@@ -66,7 +67,7 @@ type Reader struct {
 func (r *Reader) ReadToEndAdvise(ctx context.Context) {
 	defer func() {
 		if r.FileType != gzipExtension {
-			r.fadviseFile()
+			r.fadviseFile(true)
 		}
 	}()
 	r.ReadToEnd(ctx)
@@ -143,7 +144,7 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 				return
 			}
 			if pending >= dontNeedSize || r.DontNeedIdlePolls >= dontNeedTimes {
-				r.fadviseFile()
+				r.fadviseFile(false)
 			}
 		}
 	}()
@@ -154,7 +155,13 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 		}
 	}
 
-	r.readContents(ctx)
+	skippedBytes := r.readContents(ctx)
+	if skippedBytes > 0 {
+		r.DontNeedOffset += skippedBytes
+		if r.Offset == startOffset {
+			r.Offset += skippedBytes
+		}
+	}
 }
 
 // createGzipReader creates gzip reader and returns the file offset
@@ -242,7 +249,30 @@ func (r *Reader) readHeader(ctx context.Context) (doneReadingFile bool) {
 	return false
 }
 
-func (r *Reader) readContents(ctx context.Context) {
+func (r *Reader) readContents(ctx context.Context) (skipped int64) {
+	if r.Offset == 0 && r.reader == r.file {
+		// 先检查首字节，普通日志无需定位空洞；ReadAt 不改变正文读取位置。
+		var firstByte [1]byte
+		n, err := r.file.ReadAt(firstByte[:], 0)
+		if err != nil && !errors.Is(err, io.EOF) {
+			r.set.Logger.Error("failed to read first file byte", zap.Error(err))
+			return
+		}
+		if n > 0 && firstByte[0] == 0 {
+			// 仅处理普通文件的前导 NUL，保留内容中间的零字节。
+			offset, err2 := fileoffset.FirstNonNUL(r.file)
+			if err2 != nil {
+				r.set.Logger.Error("failed to locate file data", zap.Error(err2))
+				return
+			}
+			if _, err = r.file.Seek(offset, io.SeekStart); err != nil {
+				r.set.Logger.Error("failed to seek to file data", zap.Error(err))
+				return
+			}
+			r.Reset(offset)
+			skipped = offset
+		}
+	}
 	var buf []byte
 	if r.TokenLenState.MinimumLength <= r.initialBufferSize {
 		bufPtr := r.getBufPtrFromPool()

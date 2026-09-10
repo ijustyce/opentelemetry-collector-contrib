@@ -18,6 +18,51 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/internal/filetest"
 )
 
+func TestNewFromFileNULPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+		size int
+		want string
+	}{
+		{name: "ordinary", data: "abcdef", size: 4, want: "abcd"},
+		{name: "embedded NUL", data: "a\x00bcdef", size: 4, want: "a\x00bc"},
+		{name: "single leading NUL", data: "\x00abcdef", size: 4, want: "abcd"},
+		{name: "prefix exceeds fingerprint", data: "\x00\x00\x00\x00\x00abcdef", size: 4, want: "abcd"},
+		{name: "partial fingerprint", data: "\x00ab", size: 4, want: "ab"},
+		{name: "only NULs", data: "\x00\x00", size: 4},
+		{name: "empty", size: 4},
+		{name: "zero size", data: "\x00abc"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := filetest.OpenTemp(t, t.TempDir())
+			_, err := file.WriteString(tc.data)
+			require.NoError(t, err)
+			fp, err := NewFromFile(file, tc.size, false, zap.NewNop())
+			require.NoError(t, err)
+			require.Equal(t, tc.want, string(fp.firstBytes))
+			position, err := file.Seek(0, io.SeekCurrent)
+			require.NoError(t, err)
+			require.Equal(t, int64(len(tc.data)), position)
+		})
+	}
+}
+
+func TestNewFromSparseFile(t *testing.T) {
+	file := filetest.OpenTemp(t, t.TempDir())
+	const start = (256 << 20) + 123
+	_, err := file.WriteAt([]byte("\x00ab\x00cd"), start)
+	require.NoError(t, err)
+	_, err = file.Seek(7, io.SeekStart)
+	require.NoError(t, err)
+	fp, err := NewFromFile(file, 4, false, zap.NewNop())
+	require.NoError(t, err)
+	require.Equal(t, []byte("ab\x00c"), fp.firstBytes)
+	position, err := file.Seek(0, io.SeekCurrent)
+	require.NoError(t, err)
+	require.Equal(t, int64(7), position)
+}
+
 func TestNewDoesNotModifyOffset(t *testing.T) {
 	fingerprint := "this is the fingerprint"
 	next := "this comes after the fingerprint and is substantially longer than the fingerprint"
@@ -328,13 +373,14 @@ func TestCompressionFingerprint(t *testing.T) {
 	require.NoError(t, gzipWriter.Close())
 	require.NotZero(t, n, "gzip file should not be empty")
 
-	// set seek to the start of the file
-	_, err = compressedFile.Seek(0, io.SeekStart)
+	_, err = compressedFile.Seek(3, io.SeekStart)
 	require.NoError(t, err)
 
 	compressedFP, err := NewFromFile(compressedFile, len(data), true, zap.NewNop())
 	require.NoError(t, err)
 
-	uncompressedFP := New(data)
-	uncompressedFP.Equal(compressedFP)
+	require.Equal(t, data, compressedFP.firstBytes)
+	position, err := compressedFile.Seek(0, io.SeekCurrent)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), position)
 }

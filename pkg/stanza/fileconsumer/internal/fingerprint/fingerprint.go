@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/compression"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fileoffset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 )
 
@@ -32,7 +33,8 @@ func New(first []byte) *Fingerprint {
 	return &Fingerprint{firstBytes: first}
 }
 
-// NewFromFile computes fingerprint of the given file using first 'N' bytes
+// NewFromFile computes the fingerprint using the first 'N' bytes after the
+// leading NUL prefix of an uncompressed file, without changing its position.
 // Set decompressData to true to compute fingerprint of compressed files by decompressing its data first
 func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logger) (*Fingerprint, error) {
 	buf := make([]byte, size)
@@ -40,14 +42,14 @@ func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logge
 		if decompressData {
 			if compression.IsGzipFile(file, logger) {
 				// If the file is of compressed type, uncompress the data before creating its fingerprint
-				uncompressedData, err := gzip.NewReader(file)
+				uncompressedData, err := gzip.NewReader(io.NewSectionReader(file, 0, 1<<63-1))
 				if err != nil {
 					return nil, fmt.Errorf("error uncompressing gzip file: %w", err)
 				}
 				defer uncompressedData.Close()
 
-				n, err := uncompressedData.Read(buf)
-				if err != nil && !errors.Is(err, io.EOF) {
+				n, err := io.ReadFull(uncompressedData, buf)
+				if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 					return nil, fmt.Errorf("error reading fingerprint bytes: %w", err)
 				}
 				return New(buf[:n]), nil
@@ -55,7 +57,23 @@ func NewFromFile(file *os.File, size int, decompressData bool, logger *zap.Logge
 		}
 	}
 
+	if size == 0 {
+		return New(buf), nil
+	}
+	// 正常文件只从文件头读取一次指纹，避免额外的空洞定位和前导字节扫描。
 	n, err := file.ReadAt(buf, 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("reading fingerprint bytes: %w", err)
+	}
+	if n == 0 || buf[0] != 0 {
+		return New(buf[:n]), nil
+	}
+	// 仅在首字节为 NUL 时定位实际内容，并复用缓冲区重新读取指纹。
+	offset, err := fileoffset.FirstNonNUL(file)
+	if err != nil {
+		return nil, fmt.Errorf("finding fingerprint start: %w", err)
+	}
+	n, err = file.ReadAt(buf, offset)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("reading fingerprint bytes: %w", err)
 	}
