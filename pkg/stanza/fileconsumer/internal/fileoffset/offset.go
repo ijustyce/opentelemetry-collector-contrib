@@ -17,7 +17,9 @@ type Metrics struct {
 	firstNonNullCounter metric.Int64Counter
 	seekSuccess         metric.Int64Counter
 	seekFailed          metric.Int64Counter
+	seekError           metric.Int64Counter
 	seekFull            metric.Int64Counter
+	seekFallback        metric.Int64Counter
 }
 
 func NewMetrics(meter metric.Meter) (*Metrics, error) {
@@ -31,17 +33,27 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 	errs = errors.Join(errs, err)
 	metrics.seekSuccess, err = meter.Int64Counter(
 		"first_non_null_success",
-		metric.WithDescription("Total number of first nonnull call"),
+		metric.WithDescription("Total number of first nonnull success call"),
 	)
 	errs = errors.Join(errs, err)
 	metrics.seekFailed, err = meter.Int64Counter(
 		"first_non_null_failed",
-		metric.WithDescription("Total number of first nonnull call"),
+		metric.WithDescription("Total number of first nonnull failed call"),
 	)
 	errs = errors.Join(errs, err)
 	metrics.seekFull, err = meter.Int64Counter(
 		"first_non_null_full",
-		metric.WithDescription("Total number of first nonnull call"),
+		metric.WithDescription("Total number of first nonnull full call"),
+	)
+	errs = errors.Join(errs, err)
+	metrics.seekError, err = meter.Int64Counter(
+		"first_non_null_error",
+		metric.WithDescription("Total number of first nonnull error call"),
+	)
+	errs = errors.Join(errs, err)
+	metrics.seekFallback, err = meter.Int64Counter(
+		"first_non_null_fallback",
+		metric.WithDescription("Total number of first nonnull fallback call"),
 	)
 	errs = errors.Join(errs, err)
 	return metrics, errs
@@ -57,6 +69,7 @@ func FirstNonNUL(file *os.File, metric *Metrics) (int64, error) {
 	// 优先让文件系统定位数据区，避免逐字节读取大段稀疏空洞。
 	offset, err := seekData(file, metric)
 	if err != nil {
+		metric.seekError.Add(context.Background(), 1)
 		return 0, err
 	}
 	// 数据区仍可能包含 NUL；复用固定缓冲区，不随空洞长度分配内存。
@@ -70,6 +83,7 @@ func FirstNonNUL(file *os.File, metric *Metrics) (int64, error) {
 			// 找到首个非 NUL 后立即停止，后续内容中的 NUL 不属于前导空白。
 			return offset, nil
 		}
+		metric.seekFallback.Add(context.Background(), 1)
 		if readErr != nil {
 			if errors.Is(readErr, io.EOF) {
 				// 本轮已读字节也全部为 NUL，offset 即扫描到的末尾位置。
