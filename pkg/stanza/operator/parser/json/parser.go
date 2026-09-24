@@ -6,14 +6,16 @@ package json // import "github.com/open-telemetry/opentelemetry-collector-contri
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strings"
 
-	"github.com/goccy/go-json"
+	"github.com/bytedance/sonic"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 )
+
+var sonicUseNumber = sonic.Config{UseNumber: true}.Froze()
 
 // Parser is an operator that parses JSON.
 type Parser struct {
@@ -40,15 +42,13 @@ func (p *Parser) parse(value any) (any, error) {
 		// when it is enabled, they will be parsed as `json.Number`, later the parser
 		// will convert them to `int` or `float64` according to the field type.
 		if p.parseInts {
-			d := json.NewDecoder(strings.NewReader(m))
-			d.UseNumber()
-			err := d.Decode(&parsedValue)
+			err := sonicUseNumber.UnmarshalFromString(m, &parsedValue)
 			if err != nil {
 				return nil, err
 			}
 			convertNumbers(parsedValue)
 		} else {
-			err := json.Unmarshal([]byte(m), &parsedValue)
+			err := sonic.UnmarshalString(m, &parsedValue)
 			if err != nil {
 				return nil, err
 			}

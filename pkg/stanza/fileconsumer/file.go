@@ -61,6 +61,11 @@ func (m *Manager) Start(persister operator.Persister) error {
 	// instantiate the tracker
 	m.instantiateTracker(ctx, persister)
 
+	m.set.Logger.Info("logger-started",
+		zap.Int("maxBatches", m.maxBatches),
+		zap.Int("maxBatchFiles", m.maxBatchFiles),
+	)
+
 	if persister != nil {
 		m.persister = persister
 		offsets, err := checkpoint.Load(ctx, m.persister)
@@ -129,22 +134,35 @@ func (m *Manager) poll(ctx context.Context) {
 	if err != nil {
 		m.set.Logger.Debug("finding files", zap.Error(err))
 	}
-	m.set.Logger.Debug("matched files", zap.Strings("paths", matches))
+	m.set.Logger.Debug("matched files", zap.Strings("paths", matches),
+		zap.Int("matchesSize", len(matches)),
+		zap.Int("maxBatches", m.maxBatches),
+		zap.Int("maxBatchFiles", m.maxBatchFiles))
 
-	for len(matches) > m.maxBatchFiles {
-		m.consume(ctx, matches[:m.maxBatchFiles])
+	if len(matches) > m.maxBatchFiles {
+		for len(matches) > m.maxBatchFiles {
+			m.consume(ctx, matches[:m.maxBatchFiles])
 
-		// If a maxBatches is set, check if we have hit the limit
-		if m.maxBatches != 0 {
-			batchesProcessed++
-			if batchesProcessed >= m.maxBatches {
-				return
+			// If a maxBatches is set, check if we have hit the limit
+			if m.maxBatches != 0 {
+				batchesProcessed++
+				if batchesProcessed >= m.maxBatches {
+					m.set.Logger.Error("too many batches",
+						zap.Int("maxBatches", m.maxBatches),
+						zap.Int("maxBatchFiles", m.maxBatchFiles),
+						zap.Int("batchesProcessed", batchesProcessed))
+					break
+				}
 			}
+			matches = matches[m.maxBatchFiles:]
 		}
-
-		matches = matches[m.maxBatchFiles:]
+		// 最后一个批次
+		if len(matches) <= m.maxBatchFiles {
+			m.consume(ctx, matches)
+		}
+	} else {
+		m.consume(ctx, matches)
 	}
-	m.consume(ctx, matches)
 
 	// Any new files that appear should be consumed entirely
 	m.readerFactory.FromBeginning = true
