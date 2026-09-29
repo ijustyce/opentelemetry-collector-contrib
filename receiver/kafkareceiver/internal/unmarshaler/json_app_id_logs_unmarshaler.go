@@ -31,6 +31,27 @@ func removeNilFields(value any) {
 	}
 }
 
+func hasAppId(value any) bool {
+	switch record := value.(type) {
+	case map[string]any:
+		for k, v := range record {
+			if k == "app_id" && v != nil && v != "" {
+				return true
+			}
+			if hasAppId(v) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range record {
+			if hasAppId(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (JSONAppIdLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 	// create a new Logs struct to be populated with log data and returned
 	p := plog.NewLogs()
@@ -41,12 +62,10 @@ func (JSONAppIdLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 		return p, err
 	}
 
-	appId, ok := jsonVal["app_id"]
-	if !ok || appId == nil || appId == "" {
+	removeNilFields(jsonVal)
+	if !hasAppId(jsonVal) {
 		return p, nil
 	}
-
-	removeNilFields(jsonVal)
 	// create a new log record
 	logRecords := p.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
 	logRecords.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
