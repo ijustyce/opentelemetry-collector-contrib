@@ -10,11 +10,28 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-var _ plog.Unmarshaler = JSONLogsUnmarshaler{}
+var _ plog.Unmarshaler = JSONAppIdLogsUnmarshaler{}
 
-type JSONLogsUnmarshaler struct{}
+type JSONAppIdLogsUnmarshaler struct{}
 
-func (JSONLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
+func removeNilFields(value any) {
+	switch record := value.(type) {
+	case map[string]any:
+		for key, field := range record {
+			if field == nil {
+				delete(record, key)
+				continue
+			}
+			removeNilFields(field)
+		}
+	case []any:
+		for _, item := range record {
+			removeNilFields(item)
+		}
+	}
+}
+
+func (JSONAppIdLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 	// create a new Logs struct to be populated with log data and returned
 	p := plog.NewLogs()
 
@@ -22,6 +39,11 @@ func (JSONLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 	jsonVal := map[string]any{}
 	if err := json.Unmarshal(buf, &jsonVal); err != nil {
 		return p, err
+	}
+
+	appId, ok := jsonVal["app_id"]
+	if !ok || appId == nil || appId == "" {
+		return p, nil
 	}
 
 	removeNilFields(jsonVal)

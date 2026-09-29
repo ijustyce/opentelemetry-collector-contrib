@@ -72,6 +72,8 @@ func newLogsUnmarshaler(encoding string, set receiver.Settings, host component.H
 		return unmarshaler.RawLogsUnmarshaler{}, nil
 	case "json":
 		return unmarshaler.JSONLogsUnmarshaler{}, nil
+	case "json_app_id":
+		return unmarshaler.JSONAppIdLogsUnmarshaler{}, nil
 	case "azure_resource_logs":
 		return &azure.ResourceLogsUnmarshaler{
 			Version: set.BuildInfo.Version,

@@ -375,6 +375,11 @@ func processMessage[T plog.Logs | pmetric.Metrics | ptrace.Traces | pprofile.Pro
 		return consumererror.NewPermanent(err)
 	}
 
+	if n == 0 {
+		handler.endObsReport(obsCtx, n, nil)
+		return nil
+	}
+
 	// Add resource attributes from headers if configured
 	if config.HeaderExtraction.ExtractHeaders {
 		for key, value := range getMessageHeaderResourceAttributes(
