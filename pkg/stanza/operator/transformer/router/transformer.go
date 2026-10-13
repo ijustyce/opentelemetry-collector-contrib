@@ -69,7 +69,7 @@ func (t *Transformer) Process(ctx context.Context, entry *entry.Entry) error {
 
 			for _, output := range route.OutputOperators {
 				if err = output.Process(ctx, entry); err != nil {
-					t.Logger().Error("Failed to process entry", zapAttributes(entry, err)...)
+					t.Logger().Debug("Failed to process entry", zapAttributes(entry, err)...)
 				}
 			}
 			break

@@ -74,7 +74,7 @@ func (w *WriterOperator) Write(ctx context.Context, e *entry.Entry) error {
 		}
 		err := op.Process(ctx, e.Copy())
 		if err != nil {
-			w.Logger().Error("Failed to process entry", zap.Error(err))
+			w.Logger().Debug("Failed to process entry", zap.Error(err))
 		}
 	}
 	return nil

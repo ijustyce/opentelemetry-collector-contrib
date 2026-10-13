@@ -161,7 +161,7 @@ func (t *TransformerOperator) HandleEntryErrorWithWrite(ctx context.Context, ent
 			t.Logger().Debug("Failed to process entry", zapAttributes(entry, t.OnError, err)...)
 		}
 	} else {
-		t.Logger().Error("Failed to process entry", zapAttributes(entry, t.OnError, err)...)
+		t.Logger().Debug("Failed to process entry", zapAttributes(entry, t.OnError, err)...)
 	}
 	if t.OnError == SendOnError || t.OnError == SendOnErrorQuiet {
 		if writeErr := write(ctx, entry); writeErr != nil {

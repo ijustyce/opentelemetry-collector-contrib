@@ -36,7 +36,7 @@ func (o *Output) Process(_ context.Context, entry *entry.Entry) error {
 	err := o.encoder.Encode(entry)
 	if err != nil {
 		o.mux.Unlock()
-		o.Logger().Error("Failed to process entry", zap.Error(err))
+		o.Logger().Debug("Failed to process entry", zap.Error(err))
 		return err
 	}
 	o.mux.Unlock()
