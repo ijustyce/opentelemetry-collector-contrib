@@ -66,6 +66,58 @@ func (JSONAppIdLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 	if !hasAppId(jsonVal) {
 		return p, nil
 	}
+
+	if datas, ok := jsonVal["datas"]; ok {
+		if dataArray, ok2 := datas.([]any); ok2 && len(dataArray) > 0 {
+			isAllMap := true
+			for _, a := range dataArray {
+				_, ok3 := a.(map[string]any)
+				if !ok3 {
+					isAllMap = false
+					break
+				}
+			}
+
+			if !isAllMap {
+				// create a new log record
+				logRecords := p.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+				logRecords.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+				// Set the unmarshaled jsonVal as the body of the log record
+				if err := logRecords.Body().SetEmptyMap().FromRaw(jsonVal); err != nil {
+					return p, err
+				}
+				return p, nil
+			}
+
+			copyOldMap := func() map[string]any {
+				result := make(map[string]any)
+				result["_msg"] = "-"
+				for s, a := range jsonVal {
+					if s != "datas" {
+						result[s] = a
+					}
+				}
+				return result
+			}
+			for _, m := range dataArray {
+				// create a new log record
+				logRecords := p.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+				logRecords.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+				result := copyOldMap()
+				for s, a := range m.(map[string]any) {
+					result[s] = a
+				}
+				// Set the unmarshaled jsonVal as the body of the log record
+				if err := logRecords.Body().SetEmptyMap().FromRaw(result); err != nil {
+					return p, err
+				}
+			}
+			return p, nil
+		}
+	}
+
 	// create a new log record
 	logRecords := p.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
 	logRecords.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
