@@ -67,6 +67,10 @@ func (JSONAppIdLogsUnmarshaler) UnmarshalLogs(buf []byte) (plog.Logs, error) {
 		return p, nil
 	}
 
+	if value, ok := jsonVal["_msg"]; !ok || value == "" {
+		jsonVal["_msg"] = "-"
+	}
+
 	if datas, ok := jsonVal["datas"]; ok {
 		if dataArray, ok2 := datas.([]any); ok2 && len(dataArray) > 0 {
 			isAllMap := true
